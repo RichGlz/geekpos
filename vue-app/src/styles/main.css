@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+/**
+ * Sistema de diseño Geeksium POS.
+ * Todos los colores son tokens semánticos: los componentes nunca usan
+ * utilidades de color en crudo (bg-white, text-black, bg-[#...]).
+ * Interfaz desktop-first, alto contraste y densidad alta para caja.
+ */
+@theme {
+  --color-surface-base: oklch(0.19 0.02 255);
+  --color-surface-raised: oklch(0.24 0.024 255);
+  --color-surface-overlay: oklch(0.28 0.026 255);
+  --color-surface-inset: oklch(0.16 0.02 255);
+
+  --color-ink: oklch(0.96 0.008 255);
+  --color-ink-muted: oklch(0.74 0.016 255);
+  --color-ink-subtle: oklch(0.6 0.018 255);
+
+  --color-line: oklch(0.34 0.022 255);
+  --color-line-strong: oklch(0.44 0.026 255);
+
+  --color-brand: oklch(0.72 0.16 172);
+  --color-brand-strong: oklch(0.63 0.16 172);
+  --color-brand-ink: oklch(0.16 0.03 172);
+
+  --color-accent: oklch(0.78 0.15 78);
+  --color-accent-ink: oklch(0.2 0.04 78);
+
+  --color-danger: oklch(0.63 0.2 25);
+  --color-danger-ink: oklch(0.97 0.01 25);
+  --color-success: oklch(0.72 0.15 152);
+  --color-warning: oklch(0.79 0.15 85);
+
+  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bebas Neue", "Barlow", ui-sans-serif, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-panel: 0.75rem;
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-surface-base);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: 0.02em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+}
+
+@utility panel {
+  background-color: var(--color-surface-raised);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+}
+
+@utility field {
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-line-strong);
+  background-color: var(--color-surface-inset);
+  color: var(--color-ink);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.9375rem;
+}

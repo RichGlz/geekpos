@@ -1,0 +1,359 @@
+# ============================================================
+# Geeksium POS - .gitignore
+# Monorepo:
+#   /              -> Portal Lovable / React
+#   /vue-app       -> Aplicación Vue 3 / PWA
+#   /api           -> API Fastify / Node.js
+# ============================================================
+
+
+# ============================================================
+# 1. VARIABLES DE ENTORNO Y SECRETOS
+# ============================================================
+# Nunca subir archivos .env reales.
+# Pueden contener:
+# - DATABASE_URL
+# - JWT_SECRET
+# - credenciales Supabase
+# - credenciales AWS/S3
+# - SMTP
+# - tokens/API keys
+
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Los archivos de ejemplo SÍ deben permanecer en Git.
+!.env.example
+!**/.env.example
+!.env.template
+!**/.env.template
+!.env.sample
+!**/.env.sample
+
+
+# ============================================================
+# 2. CREDENCIALES, CERTIFICADOS Y CLAVES PRIVADAS
+# ============================================================
+# Evita subir accidentalmente llaves privadas,
+# certificados con clave, credenciales SSH, etc.
+
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+
+# Credenciales comunes de servicios/cloud.
+credentials.json
+service-account*.json
+service_account*.json
+google-credentials*.json
+aws-credentials*
+secrets.json
+secrets.*.json
+
+
+# ============================================================
+# 3. DEPENDENCIAS NODE / JAVASCRIPT
+# ============================================================
+# Cada proyecto instala sus propias dependencias.
+# Nunca deben versionarse.
+
+node_modules/
+**/node_modules/
+
+
+# ============================================================
+# 4. BUILDS Y ARTEFACTOS GENERADOS
+# ============================================================
+# Portal React/TanStack, Vue, Vite, Nitro, etc.
+
+dist/
+**/dist/
+
+dist-ssr/
+**/dist-ssr/
+
+.output/
+**/.output/
+
+.vinxi/
+**/.vinxi/
+
+.tanstack/
+**/.tanstack/
+
+.nitro/
+**/.nitro/
+
+build/
+**/build/
+
+out/
+**/out/
+
+
+# ============================================================
+# 5. CACHÉS DE HERRAMIENTAS
+# ============================================================
+
+.cache/
+**/.cache/
+
+.vite/
+**/.vite/
+
+.turbo/
+**/.turbo/
+
+.eslintcache
+**/.eslintcache
+
+.stylelintcache
+
+*.tsbuildinfo
+
+
+# ============================================================
+# 6. TESTS Y COBERTURA
+# ============================================================
+
+coverage/
+**/coverage/
+
+.nyc_output/
+**/.nyc_output/
+
+test-results/
+**/test-results/
+
+playwright-report/
+**/playwright-report/
+
+blob-report/
+**/blob-report/
+
+
+# ============================================================
+# 7. LOGS
+# ============================================================
+
+logs/
+**/logs/
+
+*.log
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+debug.log
+error.log
+
+
+# ============================================================
+# 8. ARCHIVOS LOCALES / TEMPORALES
+# ============================================================
+
+*.local
+
+tmp/
+**/tmp/
+
+temp/
+**/temp/
+
+.tmp/
+**/.tmp/
+
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+
+# Archivos swap de Vim
+*.swp
+*.swo
+*.sw?
+
+
+# ============================================================
+# 9. BASES DE DATOS LOCALES
+# ============================================================
+# Actualmente PostgreSQL es la BD principal.
+# Estos patrones evitan subir una futura BD local
+# de pruebas, SQLite o archivos de respaldo.
+
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+
+# Dumps SQL pueden contener datos reales.
+# Las migraciones SQL NO se ignoran porque están en /api/migrations.
+*.dump
+*.dump.gz
+*.sql.gz
+
+# Directorios locales de PostgreSQL
+pgdata/
+postgres-data/
+**/pgdata/
+**/postgres-data/
+
+
+# ============================================================
+# 10. RESPALDOS Y EXPORTACIONES DE DATOS
+# ============================================================
+# Evita subir exportaciones que puedan contener
+# ventas, clientes, inventario o información privada.
+
+backups/
+**/backups/
+
+exports/
+**/exports/
+
+data-export/
+**/data-export/
+
+*.csv.local
+*.xlsx.local
+*.pdf.local
+
+
+# ============================================================
+# 11. PWA / SERVICE WORKER GENERADO
+# ============================================================
+# Los archivos fuente de la PWA sí se versionan.
+# Los generados dentro de dist ya quedan cubiertos arriba.
+
+workbox-*.js
+sw.js.map
+
+
+# ============================================================
+# 12. WRANGLER / CLOUDFLARE
+# ============================================================
+
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+
+# ============================================================
+# 13. EDITORES / IDE
+# ============================================================
+
+# Visual Studio Code
+.vscode/*
+
+# Permitimos recomendaciones compartidas del proyecto.
+!.vscode/extensions.json
+
+# Si posteriormente quieres compartir configuración segura:
+# !.vscode/settings.json
+
+# JetBrains
+.idea/
+
+# Visual Studio
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.ntvs*
+*.njsproj
+*.sln
+
+
+# ============================================================
+# 14. CODEX / HERRAMIENTAS LOCALES
+# ============================================================
+# Archivos de trabajo temporales de agentes o herramientas.
+# AGENTS.md NO se ignora porque forma parte del proyecto.
+
+.codex/
+.codex-local/
+.agent-cache/
+.ai-cache/
+
+
+# ============================================================
+# 15. SISTEMA OPERATIVO
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+
+# ============================================================
+# 16. PAQUETES / ARCHIVOS COMPRIMIDOS TEMPORALES
+# ============================================================
+# Útil para evitar subir copias completas del proyecto
+# o respaldos descargados de Lovable.
+
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+
+
+# ============================================================
+# 17. ARCHIVOS QUE SÍ DEBEN QUEDAR EN EL REPOSITORIO
+# ============================================================
+# Estos comentarios son informativos.
+#
+# NO ignorar:
+#
+# package.json
+# package-lock.json
+# bun.lock
+# bunfig.toml
+#
+# api/migrations/*.sql
+#
+# api/.env.example
+# vue-app/.env.example
+#
+# docs/
+# AGENTS.md
+# README.md
+#
+# .lovable/
+#
+# vue-app/public/icons/
+#
+# Código fuente de:
+# src/
+# vue-app/src/
+# api/src/
