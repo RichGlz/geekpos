@@ -1,25 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { http } from "@/lib/http";
+import { computed } from "vue";
 import { useAuthStore } from "@/modules/auth/auth.store";
+import { useSyncStore } from "@/modules/system/sync.store";
 
-interface OrganizationSummary {
-  organization: { name: string; slug: string; timezone: string; currency: string } | null;
-  license: { status: string | null; plan: string; expiresAt: string | null } | null;
-}
 
 const auth = useAuthStore();
-const summary = ref<OrganizationSummary | null>(null);
-const loadError = ref<string | null>(null);
-
-onMounted(async () => {
-  try {
-    const { data } = await http.get<OrganizationSummary>("/organization/me");
-    summary.value = data;
-  } catch {
-    loadError.value = "No fue posible cargar los datos de la organización.";
-  }
-});
+const sync = useSyncStore();
+const summary = computed(() => sync.context);
 </script>
 
 <template>
@@ -29,7 +16,7 @@ onMounted(async () => {
       Fase 1 del proyecto: base multiempresa, sesiones y licenciamiento en funcionamiento.
     </p>
 
-    <p v-if="loadError" role="alert" class="mt-6 text-sm text-danger">{{ loadError }}</p>
+    <p v-if="!summary" role="status" class="mt-6 text-sm text-ink-muted">Sincroniza para cargar los datos de tu organización.</p>
 
     <div class="mt-6 grid grid-cols-3 gap-4">
       <article class="panel p-5">

@@ -80,7 +80,7 @@ async function signOut(): Promise<void> {
       </ul>
     </nav>
 
-    <main class="overflow-auto p-6">
+    <main class="overflow-auto p-6 pb-32">
       <RouterView />
     </main>
   </div>

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Geeksium POS — API propia (Node.js + TypeScript + Fastify + PostgreSQL)",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
@@ -22,7 +22,8 @@
     "@fastify/cors": "^10.1.0",
     "@fastify/helmet": "^13.0.1",
     "@fastify/rate-limit": "^10.3.0",
-    "argon2": "^0.44.0",
+    "@node-rs/argon2": "^2.2.0",
+    "dotenv": "^17.4.2",
     "fastify": "^5.6.1",
     "jose": "^6.1.0",
     "pg": "^8.16.3",

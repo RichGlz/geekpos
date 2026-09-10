@@ -13,14 +13,11 @@ import { getContext } from "../context.js";
  * Así el mapa de módulos futuros no queda expuesto a anónimos.
  */
 export const PLACEHOLDER_MODULES = [
-  "products",
   "inventory",
   "sales",
   "purchases",
   "transfers",
   "reports",
-  "sync",
-  "license",
   "platform",
 ] as const;
 

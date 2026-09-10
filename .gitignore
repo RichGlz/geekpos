@@ -19,6 +19,8 @@
 # - SMTP
 # - tokens/API keys
 
+**.bat
+
 .env
 .env.*
 **/.env

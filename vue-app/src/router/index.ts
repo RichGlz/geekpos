@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
       { path: "pos", name: "pos", component: () => import("@/views/PlaceholderView.vue"), meta: { title: "Punto de venta" } },
       { path: "inventario", name: "inventory", component: () => import("@/views/PlaceholderView.vue"), meta: { title: "Inventario" } },
       { path: "traspasos", name: "transfers", component: () => import("@/views/PlaceholderView.vue"), meta: { title: "Traspasos" } },
-      { path: "catalogo", name: "catalog", component: () => import("@/views/PlaceholderView.vue"), meta: { title: "Catálogo" } },
+      { path: "catalogo", name: "catalog", component: () => import("@/modules/catalog/CatalogView.vue"), meta: { title: "Catálogo" } },
       { path: "sesiones", name: "sessions", component: () => import("@/views/SessionsView.vue"), meta: { title: "Sesiones activas" } },
     ],
   },

@@ -356,13 +356,13 @@ suite("integración: autenticación y aislamiento multiempresa", () => {
   });
 
   it("los placeholders son privados: 401 sin sesión, 501 con sesión, 404 si no existen", async () => {
-    const anonymous = await app.inject({ method: "GET", url: "/api/v1/products" });
+    const anonymous = await app.inject({ method: "GET", url: "/api/v1/inventory" });
     expect(anonymous.statusCode).toBe(401);
 
     const { accessToken } = await login(tenantA.ownerEmail);
     const authenticated = await app.inject({
       method: "GET",
-      url: "/api/v1/products",
+      url: "/api/v1/inventory",
       headers: { authorization: `Bearer ${accessToken}` },
     });
     expect(authenticated.statusCode).toBe(501);
@@ -713,4 +713,3 @@ suite("integración: autenticación y aislamiento multiempresa", () => {
     }
   });
 });
-

@@ -1,14 +1,16 @@
 import tailwindcss from "@tailwindcss/vite";
 import vue from "@vitejs/plugin-vue";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 /**
  * Base de la API tal y como la verá el navegador. Puede ser relativa
  * ("/api/v1") o una URL absoluta a otro origen.
  */
-const apiBaseUrl = process.env["VITE_API_BASE_URL"] ?? "/api/v1";
+export default defineConfig(({ mode }) => {
+const buildEnv = { ...loadEnv(mode, process.cwd(), "VITE_"), ...process.env };
+const apiBaseUrl = buildEnv["VITE_API_BASE_URL"] ?? "/api/v1";
 const apiIsAbsolute = /^https?:\/\//i.test(apiBaseUrl);
 const apiOrigin = apiIsAbsolute ? new URL(apiBaseUrl).origin : null;
 const apiPathPrefix = apiIsAbsolute ? new URL(apiBaseUrl).pathname : apiBaseUrl;
@@ -30,7 +32,7 @@ const apiUrlPattern = apiOrigin
   ? new RegExp(`^${escapeRegExp(apiOrigin)}/`)
   : new RegExp(`^https?://[^/]+${escapeRegExp(apiPathPrefix)}(/|$)`);
 
-export default defineConfig({
+return {
   plugins: [
     vue(),
     tailwindcss(),
@@ -65,7 +67,10 @@ export default defineConfig({
          * queremos respuestas con información de la organización en la caché
          * del navegador de un equipo compartido.
          */
-        navigateFallbackDenylist: [/^\/api\//],
+        navigateFallbackDenylist: [/^\/api(?:\/|$)/, new RegExp("^" + escapeRegExp(apiPathPrefix) + "(?:/|$)")],
+        skipWaiting: false,
+        clientsClaim: false,
+        cleanupOutdatedCaches: true,
         runtimeCaching: [
           {
             // NetworkOnly para TODA la API: login, refresh y cualquier dato
@@ -101,4 +106,5 @@ export default defineConfig({
     environment: "happy-dom",
     include: ["src/**/*.test.ts"],
   },
-} as Parameters<typeof defineConfig>[0]);
+};
+});

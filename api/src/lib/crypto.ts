@@ -1,12 +1,12 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import argon2 from "argon2";
+import { Algorithm, hash, verify } from "@node-rs/argon2";
 
 /**
  * Parámetros Argon2id. No inventamos criptografía propia: usamos la variante
  * recomendada por OWASP con costes razonables para un POS multiusuario.
  */
 const ARGON2_OPTIONS = {
-  type: argon2.argon2id,
+  algorithm: Algorithm.Argon2id,
   memoryCost: 19_456, // 19 MiB
   timeCost: 2,
   parallelism: 1,
@@ -17,12 +17,12 @@ export function newId(): string {
 }
 
 export async function hashPassword(plain: string): Promise<string> {
-  return argon2.hash(plain, ARGON2_OPTIONS);
+  return hash(plain, ARGON2_OPTIONS);
 }
 
 export async function verifyPassword(hash: string, plain: string): Promise<boolean> {
   try {
-    return await argon2.verify(hash, plain);
+    return await verify(hash, plain);
   } catch {
     return false;
   }

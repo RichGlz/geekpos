@@ -1,71 +1,60 @@
-# Estado de implementación — Geeksium POS
+﻿# Estado de implementación — Geeksium POS
 
-Fecha de corte: cierre de la Ronda 2 (Fase 0).
-Este documento dice qué existe **en el repositorio** y qué no. Si algo no aparece
-como “Listo”, no está hecho, aunque el PRD lo describa.
+Corte: 9 de septiembre de 2026. Ronda local-first, catálogo y OTA.
+**Parcialmente completo. Preparado para revisión humana local;
+NOT_READY_FOR_REMOTE_MIGRATION.** Ningún cambio aplicado a Supabase remoto.
 
-## Leyenda
+## Alcance comprobado
 
-- **Listo** — implementado y verificado con pruebas o evidencia reproducible.
-- **Parcial** — hay base funcional, faltan piezas nombradas explícitamente.
-- **No iniciado** — no hay código de negocio; las rutas responden `501`.
-
-## Backend (`api/`)
-
-| Área | Estado | Detalle |
+| Área | Estado local | Límite |
 |---|---|---|
-| Arranque Fastify + Zod + validación de entorno | Listo | Puerto 3000, `COOKIE_SECURE=true` obligatorio en producción |
-| Errores uniformes y sin fugas | Listo | 500 genérico con `requestId`, sin stack en la respuesta |
-| `/health` | Listo | 200 con base arriba, 503 con base caída |
-| Login con Argon2id | Listo | Mensajes genéricos, sin revelar si el correo existe |
-| Backoff de login | Listo | Por correo + IP, temporal y auto-liberado |
-| Access token JWT | Listo | Issuer, audience, expiración y firma verificados |
-| Refresh rotatorio en cookie HttpOnly | Listo | Solo se guarda el hash SHA-256; formato `sessionId.secret` estricto |
-| Detección de reúso y quema de familia | Listo | Cubierto por pruebas de integración |
-| Rotación concurrente | Listo | `FOR UPDATE` + `UPDATE` condicional: un único ganador |
-| Aislamiento multiempresa | Listo | Usuario, sesión y claim `org` deben coincidir |
-| Aislamiento por sucursal | Listo | `/organization/branches` y `/warehouses` filtran por `user_branches` |
-| Permisos con comodín `*` | Listo | Verificado contra `/organization/users` |
-| Licencias (ACTIVE / GRACE / READ_ONLY) | Listo | `READ_ONLY` bloquea escrituras por método HTTP |
-| Auditoría en `audit_log` | Listo | Login, refresh, reúso, logout, cierre remoto |
-| Integridad multiempresa en SQL | Listo | Migraciones `0002` y `0003` |
-| Módulos de negocio | No iniciado | `products`, `inventory`, `sales`, `purchases`, `transfers`, `reports`, `sync`, `license`, `platform` → `501` |
+| Auth, refresh, tenant y licencia | Pruebas completas pasan | Configuración real de producción pendiente |
+| Catálogo global, aliases, barcode, duplicados y archivo | Implementado | Sin importador CSV completo |
+| Precio/costo/configuración por sucursal | Implementado | Stock inicial; no hay movimientos |
+| IndexedDB, cola y sync incremental | Implementado y probado | Solo escrituras a través del protocolo generan deltas |
+| Sesión offline | Implementada y probada | Perfil sin tokens; no es grant firmado ni almacenamiento cifrado |
+| Assets WebP y dedupe por organización | Helpers/API probados | Storage real pendiente |
+| OTA con canales y bloqueos | Lógica y build probados | Alcance manual detallado en informe |
+| Auditoría catálogo/precios/costos | Transaccional | Ajustes, importaciones y administración de permisos pendientes |
+| POS, cobro, caja, inventario, compras, traspasos, reportes | No implementados | Rutas restantes son placeholders |
+| Portal React raíz | Informativo | No es el producto Vue |
 
-## Base de datos (`api/migrations/`)
+Arquitectura: Vue/PWA → IndexedDB → Sync Manager → Fastify → PostgreSQL.
+Sin SDK Supabase en Vue ni Realtime.
 
-| Migración | Contenido |
-|---|---|
-| `0001_init.sql` | Esquema inicial. **Inmutable**; crea `pgcrypto` (dependencia vigente) |
-| `0002_phase0_hardening.sql` | Claves únicas y FK compuestas `(organization_id, id)`, trigger de tenant en `user_roles` |
-| `0003_phase0_null_integrity.sql` | Triggers con `IS NOT DISTINCT FROM` en `sessions` y `user_roles` (rechazan `NULL`), `parent_token_id` con índice único |
+```text
+Product = organization scope
+Price/cost/stock = branch scope
+```
 
-No existe `0002_seed_dev.sql` ni ninguna migración de semillas.
+## Migraciones
 
-## Frontend (`vue-app/`)
+0001_init.sql, 0002_phase0_hardening.sql y 0003_phase0_null_integrity.sql
+permanecen sin cambios. La nueva 0004_local_first_catalog.sql es aditiva:
+catálogo, aliases, assets, configuración local, log de cambios, recibos,
+canal de actualización y columnas de auditoría.
 
-| Área | Estado | Detalle |
-|---|---|---|
-| Shell Vue 3 + Pinia + Tailwind | Listo | Landing, login, dashboard, sesiones, placeholders |
-| Sesión en memoria + restauración | Listo | El access token nunca toca `localStorage` |
-| Guards de navegación | Listo | Solo experiencia de usuario; la autorización real es del servidor |
-| Interceptor HTTP con refresco único | Listo | Varios 401 concurrentes comparten un refresco |
-| Modo mock (`VITE_USE_MOCKS`) | Listo | Solo desarrollo, capa aislada, banner “MODO MOCK — SOLO UI” |
-| PWA instalable + aviso de actualización accesible | Listo | `role="status"`, `aria-live` y botón “Actualizar” |
-| Indicador de estado sin conexión | Listo | Honesto: avisa de que la operación offline **aún no existe** |
-| Cola de sincronización en IndexedDB | Parcial | Estructura y pruebas listas; **no** hay operación offline real ni sincronización con el servidor |
-| POS, inventario, impresión, traspasos | No iniciado | — |
+Pasan en PostgreSQL 17.6 local desechable, también al añadir 0004 sobre
+0001–0003 con organización/sucursal preexistentes conservadas. Repetir el
+migrador indica base actualizada. La API nueva requiere 0004 antes de arrancar,
+incluso para auditoría de auth. No se verificaron roles/grants/datos remotos.
 
-## Pruebas
+## Pruebas y documentos
 
-| Suite | Cantidad | Cómo se ejecuta |
-|---|---|---|
-| `api` unitarias (licencias, backoff) | 9 | `cd api && npm test` |
-| `api` integración contra PostgreSQL real | 21 | `TEST_DATABASE_URL=... npm test` (se saltan sin esa variable) |
-| `vue-app` (store, permisos, guards, interceptor, cola offline) | 20 | `cd vue-app && npm test` |
+API: 47/47 (14 unitarias + 33 integración real). Vue: 53/53.
+Typecheck de ambos, lint de capas API y build Vue pasan.
+Consultar evidencia y límites en [validación A–K](11_VALIDATION_REPORT.md).
 
-## Deuda consciente
+- [Local-first/sync](05_LOCAL_FIRST_SYNC.md)
+- [Catálogo y permisos](06_PRODUCT_CATALOG.md)
+- [Imágenes/assets](07_ASSETS_AND_IMAGES.md)
+- [Auditoría](08_AUDIT_LOG.md)
+- [PWA/OTA](09_OTA_UPDATES.md)
+- [Despliegue y PRE-PILOT BLOCKERS](10_DEPLOYMENT.md)
 
-- No hay RLS en PostgreSQL: el aislamiento se impone en aplicación + constraints.
-  Está previsto como defensa en profundidad en una fase posterior.
-- No hay pruebas en dispositivo móvil real ni instalación PWA fuera de Chromium.
-- El portal React de la raíz es informativo y no forma parte del producto.
+## PRE-PILOT BLOCKERS
+
+PostgREST/RLS, revisión SQL remota y backup restaurable, Storage privado,
+secretos/env, TLS PostgreSQL, HTTPS/cookies/CORS, compatibilidad API/PWA,
+y política de acceso/licencia offline. Prioridades y criterios de cierre
+están en el documento de despliegue. No son cambios remotos autorizados.

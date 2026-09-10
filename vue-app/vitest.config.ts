@@ -9,7 +9,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [vue()],
   resolve: {
-    alias: { "@": path.resolve(import.meta.dirname, "src") },
+    alias: {
+      "@": path.resolve(import.meta.dirname, "src"),
+      "virtual:pwa-register": path.resolve(import.meta.dirname, "src/lib/offline/__tests__/pwaRegister.stub.ts"),
+    },
   },
   test: {
     environment: "happy-dom",

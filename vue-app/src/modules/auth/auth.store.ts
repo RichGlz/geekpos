@@ -3,6 +3,13 @@ import { computed, ref } from "vue";
 import { ApiError, configureAuthHandlers, http, setAccessToken } from "@/lib/http";
 import * as authApi from "./auth.api";
 import type { AuthUser, LicenseStatus } from "./auth.api";
+import { deleteMeta, getMeta, setMeta } from "@/lib/offline/idb";
+import { accountScope } from "@/lib/offline/catalogDb";
+import { licenseState, type OfflineLicense } from "@/lib/offline/license";
+
+interface OfflineProfile {
+  user: AuthUser; roles: string[]; permissions: string[]; licenseStatus: LicenseStatus | null;
+}
 
 /**
  * Estado de sesión del cliente.
@@ -22,6 +29,7 @@ export const useAuthStore = defineStore("auth", () => {
   const ready = ref(false);
   const pending = ref(false);
   const error = ref<string | null>(null);
+  const offlineSession = ref(false);
 
   const isAuthenticated = computed(() => user.value !== null);
   const isReadOnly = computed(() => licenseStatus.value === "READ_ONLY");
@@ -42,6 +50,7 @@ export const useAuthStore = defineStore("auth", () => {
     setAccessToken(response.accessToken);
     user.value = response.user;
     licenseStatus.value = response.licenseStatus;
+    offlineSession.value = false;
   }
 
   function clear(): void {
@@ -50,6 +59,7 @@ export const useAuthStore = defineStore("auth", () => {
     permissions.value = [];
     roles.value = [];
     licenseStatus.value = null;
+    offlineSession.value = false;
   }
 
   async function loadProfile(): Promise<void> {
@@ -61,6 +71,13 @@ export const useAuthStore = defineStore("auth", () => {
     roles.value = data.roles;
     permissions.value = data.permissions;
     licenseStatus.value = data.licenseStatus;
+    await persistProfile();
+  }
+  async function persistProfile(): Promise<void> {
+    if (user.value?.organizationId) {
+      const snapshot: OfflineProfile = { user: user.value, roles: roles.value, permissions: permissions.value, licenseStatus: licenseStatus.value };
+      await setMeta("offline-profile", snapshot).catch(() => undefined);
+    }
   }
 
   async function signIn(email: string, password: string): Promise<boolean> {
@@ -69,9 +86,11 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       apply(await authApi.login(email, password));
       await loadProfile();
+      await deleteMeta("explicit-signout").catch(() => undefined);
       return true;
     } catch (caught) {
       clear();
+      await deleteMeta("offline-profile").catch(() => undefined);
       error.value =
         caught instanceof ApiError ? caught.message : "No fue posible iniciar sesión. Intenta de nuevo.";
       return false;
@@ -85,21 +104,57 @@ export const useAuthStore = defineStore("auth", () => {
       const response = await authApi.refresh();
       apply(response);
       return response.accessToken;
-    } catch {
+    } catch (caught) {
+      if (caught instanceof ApiError && (caught.status === 0 || caught.status >= 500)) {
+        offlineSession.value = true;
+        return null;
+      }
       clear();
+      await deleteMeta("offline-profile").catch(() => undefined);
       return null;
     }
   }
 
   async function signOut(): Promise<void> {
+    await setMeta("explicit-signout", true).catch(() => undefined);
+    await deleteMeta("offline-profile").catch(() => undefined);
     try {
       await authApi.logout();
+    } catch {
+      // Local sign-out succeeds offline; bootstrap will not reuse the remaining cookie.
     } finally {
       clear();
     }
   }
 
+  async function restoreOffline(): Promise<void> {
+    const cached = await getMeta<OfflineProfile>("offline-profile").catch(() => undefined);
+    if (!cached?.user.organizationId || !cached.user.isActive || cached.user.isPlatformAdmin) return;
+    const license = await getMeta<OfflineLicense>("license:" + accountScope(cached.user.organizationId, cached.user.id));
+    if (licenseState(license) === "requires_validation") return;
+    user.value = cached.user;
+    roles.value = cached.roles;
+    permissions.value = cached.permissions;
+    licenseStatus.value = cached.licenseStatus;
+    offlineSession.value = true;
+    // UX snapshot only. It never becomes a bearer credential; API must reauthenticate.
+  }
+  async function restoreOnline(): Promise<boolean> {
+    const token = await renew();
+    if (!token) return false;
+    try { await loadProfile(); return true; } catch (caught) {
+      if (caught instanceof ApiError && (caught.status === 0 || caught.status >= 500)) offlineSession.value = true;
+      else clear();
+      return false;
+    }
+  }
+
   let bootstrapping: Promise<void> | null = null;
+  async function updateAuthorization(nextRoles: string[], nextPermissions: string[]) {
+    roles.value = nextRoles;
+    permissions.value = nextPermissions;
+    await persistProfile();
+  }
 
   /**
    * Restaura la sesión al abrir o recargar la aplicación.
@@ -112,14 +167,19 @@ export const useAuthStore = defineStore("auth", () => {
   async function bootstrap(): Promise<void> {
     if (ready.value) return;
     bootstrapping ??= (async () => {
-      configureAuthHandlers({ refresh: renew, onSessionLost: clear });
-      const token = await renew();
+      configureAuthHandlers({ refresh: renew, onSessionLost: () => { if (!offlineSession.value) clear(); } });
+      const signedOut = await getMeta<boolean>("explicit-signout").catch(() => undefined);
+      if (!signedOut && !navigator.onLine) offlineSession.value = true;
+      const token = signedOut || !navigator.onLine ? null : await renew();
       if (token) {
         try {
           await loadProfile();
-        } catch {
-          clear();
+        } catch (caught) {
+          if (caught instanceof ApiError && (caught.status === 0 || caught.status >= 500)) await restoreOffline().catch(() => undefined);
+          else clear();
         }
+      } else if (offlineSession.value) {
+        await restoreOffline().catch(() => undefined);
       }
       ready.value = true;
       bootstrapping = null;
@@ -143,5 +203,8 @@ export const useAuthStore = defineStore("auth", () => {
     signOut,
     bootstrap,
     renew,
+    offlineSession,
+    restoreOnline,
+    updateAuthorization,
   };
 });

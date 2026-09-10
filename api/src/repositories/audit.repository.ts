@@ -10,12 +10,14 @@ export interface AuditEntry {
   ipAddress: string | null;
   userAgent: string | null;
   metadata: Record<string, unknown>;
+  branchId?: string | null;
+  deviceId?: string | null;
 }
 
 export async function insert(db: Db, entry: AuditEntry): Promise<void> {
   await db.query(
-    `INSERT INTO audit_log (id, organization_id, user_id, action, entity, entity_id, ip_address, user_agent, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO audit_log (id, organization_id, user_id, action, entity, entity_id, ip_address, user_agent, metadata, branch_id, device_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
     [
       entry.id,
       entry.organizationId,
@@ -26,6 +28,8 @@ export async function insert(db: Db, entry: AuditEntry): Promise<void> {
       entry.ipAddress,
       entry.userAgent,
       JSON.stringify(entry.metadata ?? {}),
+      entry.branchId ?? null,
+      entry.deviceId ?? null,
     ],
   );
 }

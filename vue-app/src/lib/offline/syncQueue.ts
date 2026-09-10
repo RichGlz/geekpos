@@ -12,7 +12,7 @@
  */
 import { STORE_SYNC_QUEUE, isIndexedDbAvailable, withStore } from "./idb";
 
-export type SyncStatus = "PENDING" | "IN_FLIGHT" | "FAILED";
+export type SyncStatus = "PENDING" | "IN_FLIGHT" | "FAILED" | "REQUIRES_REVIEW";
 
 export interface SyncOperation {
   id: string;
@@ -26,17 +26,27 @@ export interface SyncOperation {
   attempts: number;
   lastError: string | null;
   createdAt: number;
+  /** Legacy unscoped rows are preserved but never submitted by the manager. */
+  scope?: string;
+  organizationId?: string;
+  userId?: string;
+  branchId?: string;
 }
 
 function newKey(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
+let lastCreatedAt = 0;
 
 export async function enqueue(input: {
   kind: string;
   payload: unknown;
   idempotencyKey?: string;
+  scope?: string;
+  organizationId?: string;
+  userId?: string;
+  branchId?: string;
 }): Promise<SyncOperation | null> {
   if (!isIndexedDbAvailable()) return null;
   const operation: SyncOperation = {
@@ -47,7 +57,11 @@ export async function enqueue(input: {
     status: "PENDING",
     attempts: 0,
     lastError: null,
-    createdAt: Date.now(),
+    createdAt: lastCreatedAt = Math.max(Date.now(), lastCreatedAt + 1),
+    ...(input.scope ? { scope: input.scope } : {}),
+    ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+    ...(input.userId ? { userId: input.userId } : {}),
+    ...(input.branchId ? { branchId: input.branchId } : {}),
   };
   await withStore(STORE_SYNC_QUEUE, "readwrite", (store) => store.add(operation));
   return operation;
@@ -62,10 +76,10 @@ export async function list(): Promise<SyncOperation[]> {
 }
 
 export async function countPending(): Promise<number> {
-  return (await list()).filter((item) => item.status !== "IN_FLIGHT").length;
+  return (await list()).length;
 }
 
-export async function markFailed(id: string, message: string): Promise<void> {
+export async function markFailed(id: string, message: string, review = false): Promise<void> {
   if (!isIndexedDbAvailable()) return;
   const current = await withStore<SyncOperation | undefined>(
     STORE_SYNC_QUEUE,
@@ -75,7 +89,7 @@ export async function markFailed(id: string, message: string): Promise<void> {
   if (!current) return;
   const next: SyncOperation = {
     ...current,
-    status: "FAILED",
+    status: review ? "REQUIRES_REVIEW" : "FAILED",
     attempts: current.attempts + 1,
     lastError: message,
   };
@@ -87,7 +101,7 @@ export async function remove(id: string): Promise<void> {
   await withStore(STORE_SYNC_QUEUE, "readwrite", (store) => store.delete(id));
 }
 
-/** Vacía la cola. Se usa al cerrar sesión en un equipo compartido. */
+/** Maintenance/test helper only. Logout must NEVER erase unsent operations. */
 export async function clear(): Promise<void> {
   if (!isIndexedDbAvailable()) return;
   await withStore(STORE_SYNC_QUEUE, "readwrite", (store) => store.clear());

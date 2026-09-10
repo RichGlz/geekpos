@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { z } from "zod";
 
 /**
@@ -17,6 +18,12 @@ const envSchema = z
 
     DATABASE_URL: z.string().min(1, "DATABASE_URL es obligatorio"),
     DATABASE_SSL: booleanish.default(false),
+    SUPABASE_STORAGE_URL: z.string().url().optional(),
+    SUPABASE_STORAGE_KEY: z.string().min(1).optional(),
+    SUPABASE_STORAGE_BUCKET: z.string().min(1).default("gkspos-buk"),
+    APP_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default("0.2.0"),
+    APP_MINIMUM_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default("0.1.0"),
+    APP_UPDATE_CHANNEL: z.enum(["development", "pilot", "stable"]).default("stable"),
 
     JWT_SECRET: z.string().min(32, "JWT_SECRET debe tener al menos 32 caracteres"),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().max(3600).default(900),
