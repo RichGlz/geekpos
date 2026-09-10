@@ -112,7 +112,12 @@ async function save() {
       conversions: JSON.parse(JSON.stringify(conversions.value)), assetId: itemType.value === "service" ? null : assetId.value,
       active: active.value,
     };
-    const branch = { price: price.value, cost: cost.value, trackInventory: trackInventory.value, active: localActive.value };
+    const branch = {
+      price: price.value,
+      cost: cost.value.trim() || null,
+      trackInventory: trackInventory.value,
+      active: formMode.value === "edit" ? localActive.value : true,
+    };
     if (formMode.value === "new") {
       commands.push({ idempotencyKey: crypto.randomUUID(), deviceId, kind: "product.create", productId, product,
         allowDuplicate: allowDuplicate.value, ...(canSetLocal.value && sync.branchId ? { branchId: sync.branchId, branch } : {}) });
@@ -153,7 +158,7 @@ function review(operation: SyncOperation) {
     itemType.value = command.product.itemType; conversions.value = command.product.conversions;
     assetId.value = command.product.assetId; active.value = command.product.active;
   }
-  if (command.branch) { price.value = command.branch.price; cost.value = command.branch.cost; }
+  if (command.branch) { price.value = command.branch.price; cost.value = command.branch.cost ?? ""; }
   reviewing.value = operation;
 }
 async function discard(operation: SyncOperation) {
@@ -245,15 +250,20 @@ watch(() => sync.scope, closeForm);
       </div>
       <fieldset v-if="editsLocal && active" class="grid gap-4 rounded border border-line-strong p-4 md:grid-cols-2">
         <legend class="px-2 text-sm">Datos de esta sucursal</legend>
-        <label class="grid gap-1 text-sm" :class="!price ? 'text-warning' : ''">Precio local *
+        <label class="grid gap-1 text-sm" :class="!price ? 'text-warning' : ''">Precio de venta *
           <input v-model="price" required inputmode="decimal" pattern="(0|[1-9][0-9]{0,11})(\.[0-9]{1,2})?" class="field" placeholder="Obligatorio">
+          <span class="text-xs text-ink-muted">Precio al público en esta sucursal.</span>
         </label>
-        <label class="grid gap-1 text-sm" :class="!cost ? 'text-warning' : ''">Costo local *
-          <input v-model="cost" required inputmode="decimal" pattern="(0|[1-9][0-9]{0,11})(\.[0-9]{1,2})?" class="field" placeholder="Obligatorio">
+        <label class="grid gap-1 text-sm">Costo de compra
+          <input v-model="cost" inputmode="decimal" pattern="(0|[1-9][0-9]{0,11})(\.[0-9]{1,2})?" class="field" placeholder="Opcional">
+          <span class="text-xs text-ink-muted">Costo unitario de adquisición para esta sucursal.</span>
         </label>
-        <label class="flex min-h-10 items-center gap-2 text-sm"><input v-model="trackInventory" type="checkbox"> Controlar inventario</label>
-        <label class="flex min-h-10 items-center gap-2 text-sm"><input v-model="localActive" type="checkbox"> Activo en esta sucursal</label>
-        <p class="text-xs text-ink-muted md:col-span-2">Las existencias se registrarán mediante movimientos de inventario.</p>
+        <label class="grid gap-1 text-sm">
+          <span class="flex min-h-10 items-center gap-2"><input v-model="trackInventory" type="checkbox"> Llevar control de inventario</span>
+          <span class="text-xs text-ink-muted">Registrar existencias, entradas y salidas de este producto.</span>
+        </label>
+        <label v-if="formMode === 'edit'" class="flex min-h-10 items-center gap-2 text-sm"><input v-model="localActive" type="checkbox"> Activo en esta sucursal</label>
+        <p v-else class="text-sm">Estado: <span class="font-semibold">Activo</span></p>
       </fieldset>
       <label v-if="formMode === 'edit'" class="flex min-h-10 items-center gap-2 text-sm">
         <input v-model="active" type="checkbox"> Activo en el catálogo de la organización
@@ -276,8 +286,8 @@ watch(() => sync.scope, closeForm);
     <div class="panel overflow-x-auto">
       <table class="w-full text-left text-sm">
         <thead class="border-b border-line text-ink-muted"><tr>
-          <th class="p-3">Producto</th><th class="p-3">Código</th><th class="p-3">Precio local</th>
-          <th v-if="auth.can('cost.read')" class="p-3">Costo local</th><th class="p-3">Estado</th><th class="p-3"><span class="sr-only">Acciones</span></th>
+          <th class="p-3">Producto</th><th class="p-3">Código</th><th class="p-3">Precio de venta</th>
+          <th v-if="auth.can('cost.read')" class="p-3">Costo de compra</th><th class="p-3">Estado</th><th class="p-3"><span class="sr-only">Acciones</span></th>
         </tr></thead>
         <tbody><tr v-for="product in filtered" :key="product.id" class="border-b border-line">
           <td class="p-3"><span class="font-semibold">{{ product.displayName }}</span><span class="block text-xs text-ink-muted">{{ product.category }} · {{ product.baseUnit }}</span></td>

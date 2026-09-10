@@ -58,7 +58,7 @@ export interface CatalogCommand {
   branchId?: string;
   expectedRevision?: number;
   product?: ProductInput;
-  branch?: { price: string; cost: string; trackInventory: boolean; active: boolean };
+  branch?: { price: string; cost: string | null; trackInventory: boolean; active: boolean };
   alias?: string;
   allowDuplicate?: boolean;
 }
@@ -66,6 +66,7 @@ export interface CatalogChanges {
   products: Product[];
   productAliases: ProductAlias[];
   branchProducts: BranchProduct[];
+  inventoryMovements?: import("./inventory.js").InventoryMovement[];
 }
 
 export function normalizeName(input: string): { normalizedName: string; compactKey: string } {

@@ -53,7 +53,12 @@ export async function executeCatalogCommand(db: TransactionalDb, context: Tenant
         if (!product) throw notFound();
         if (product.revision !== command.expectedRevision) throw conflict("El producto cambió. Sincroniza y revisa tu edición.", "REVISION_CONFLICT");
       }
-      const input = { ...value, barcode: normalizeBarcode(value.barcode) };
+      const input = {
+        ...value,
+        barcode: normalizeBarcode(value.barcode),
+        // El alta siempre comienza activa; solo una edición puede archivarla.
+        active: command.kind === "product.create" ? true : value.active,
+      };
       const matches = findMatches(input, await repo.products(tx, org), await repo.aliases(tx, org),
         command.kind === "product.edit" ? command.productId : undefined);
       const barcodeMatch = matches.find((m) => m.reason === "barcode");

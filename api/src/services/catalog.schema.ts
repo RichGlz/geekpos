@@ -25,7 +25,7 @@ export const commandSchema = z.object({
   expectedRevision: z.number().int().nonnegative().optional(),
   product: productSchema.optional(),
   branch: z.object({
-    price: money, cost: money, trackInventory: z.boolean(), active: z.boolean(),
+    price: money, cost: money.nullable(), trackInventory: z.boolean(), active: z.boolean(),
   }).strict().optional(),
   alias: z.string().trim().min(1).max(180).optional(),
   allowDuplicate: z.boolean().optional(),

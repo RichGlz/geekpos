@@ -10,6 +10,7 @@ vi.mock("../auth.api", () => api);
 vi.mock("@/lib/http", () => ({
   http: mock, configureAuthHandlers: vi.fn(),
   setAccessToken: (token: string | null) => { mock.token = token; },
+  getAccessToken: () => mock.token,
   ApiError: class ApiError extends Error { constructor(public status: number, message: string) { super(message); } },
 }));
 const { ApiError } = await import("@/lib/http");

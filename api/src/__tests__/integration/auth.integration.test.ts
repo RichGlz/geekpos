@@ -289,6 +289,17 @@ suite("integración: autenticación y aislamiento multiempresa", () => {
     }
   });
 
+  it("no prolonga la sesión más allá de su vencimiento absoluto", async () => {
+    const { refresh } = await login(tenantA.ownerEmail);
+    const sessionId = refresh.split(".")[0] as string;
+    await db.query("UPDATE sessions SET created_at = now() - interval '31 days' WHERE id = $1", [sessionId]);
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/auth/refresh", cookies: { [REFRESH_COOKIE]: refresh },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error.code).toBe("SESSION_EXPIRED");
+  });
+
   it("logout invalida el refresh emitido", async () => {
     const { refresh } = await login(tenantA.cashierEmail);
     const logout = await app.inject({
@@ -356,13 +367,13 @@ suite("integración: autenticación y aislamiento multiempresa", () => {
   });
 
   it("los placeholders son privados: 401 sin sesión, 501 con sesión, 404 si no existen", async () => {
-    const anonymous = await app.inject({ method: "GET", url: "/api/v1/inventory" });
+    const anonymous = await app.inject({ method: "GET", url: "/api/v1/sales" });
     expect(anonymous.statusCode).toBe(401);
 
     const { accessToken } = await login(tenantA.ownerEmail);
     const authenticated = await app.inject({
       method: "GET",
-      url: "/api/v1/inventory",
+      url: "/api/v1/sales",
       headers: { authorization: `Bearer ${accessToken}` },
     });
     expect(authenticated.statusCode).toBe(501);

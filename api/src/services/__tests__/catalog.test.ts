@@ -31,6 +31,7 @@ describe("catalog rules shared with CSV and Vue", () => {
       productId: product.id, branchId: randomUUID(), expectedRevision: 0,
       branch: { price: "12.30", cost: "1.25", trackInventory: true, active: true } };
     expect(commandSchema.safeParse(command).success).toBe(true);
+    expect(commandSchema.safeParse({ ...command, branch: { ...command.branch, cost: null } }).success).toBe(true);
     expect(commandSchema.safeParse({ ...command, branch: { ...command.branch, cost: 1.25 } }).success).toBe(false);
     expect(commandSchema.safeParse({ ...command, expectedRevision: undefined }).success).toBe(false);
     expect(commandSchema.safeParse({ ...command, organizationId: randomUUID() }).success).toBe(false);

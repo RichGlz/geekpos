@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { ApiError, configureAuthHandlers, http, setAccessToken } from "@/lib/http";
+import { ApiError, configureAuthHandlers, getAccessToken, http, setAccessToken } from "@/lib/http";
 import * as authApi from "./auth.api";
 import type { AuthUser, LicenseStatus } from "./auth.api";
 import { deleteMeta, getMeta, setMeta } from "@/lib/offline/idb";
@@ -30,6 +30,8 @@ export const useAuthStore = defineStore("auth", () => {
   const pending = ref(false);
   const error = ref<string | null>(null);
   const offlineSession = ref(false);
+  const accessExpiresAt = ref<number | null>(null);
+  const sessionExpired = ref(false);
 
   const isAuthenticated = computed(() => user.value !== null);
   const isReadOnly = computed(() => licenseStatus.value === "READ_ONLY");
@@ -48,18 +50,22 @@ export const useAuthStore = defineStore("auth", () => {
 
   function apply(response: authApi.AuthResponse): void {
     setAccessToken(response.accessToken);
+    accessExpiresAt.value = Date.now() + response.expiresIn * 1_000;
     user.value = response.user;
     licenseStatus.value = response.licenseStatus;
     offlineSession.value = false;
+    sessionExpired.value = false;
   }
 
-  function clear(): void {
+  function clear(expired = false): void {
     setAccessToken(null);
+    accessExpiresAt.value = null;
     user.value = null;
     permissions.value = [];
     roles.value = [];
     licenseStatus.value = null;
     offlineSession.value = false;
+    sessionExpired.value = expired;
   }
 
   async function loadProfile(): Promise<void> {
@@ -99,20 +105,39 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  let renewing: Promise<string | null> | null = null;
   async function renew(): Promise<string | null> {
-    try {
-      const response = await authApi.refresh();
-      apply(response);
-      return response.accessToken;
-    } catch (caught) {
-      if (caught instanceof ApiError && (caught.status === 0 || caught.status >= 500)) {
-        offlineSession.value = true;
+    const perform = async () => {
+      try {
+        const response = await authApi.refresh();
+        apply(response);
+        return response.accessToken;
+      } catch (caught) {
+        if (caught instanceof ApiError && (caught.status === 0 || caught.status >= 500)) {
+          offlineSession.value = true;
+          return null;
+        }
+        clear(true);
+        await deleteMeta("offline-profile").catch(() => undefined);
         return null;
       }
-      clear();
-      await deleteMeta("offline-profile").catch(() => undefined);
-      return null;
+    };
+    // La cookie es compartida entre pestañas. Serializar la rotación evita
+    // que dos focos simultáneos presenten el mismo refresh token.
+    if (!renewing) {
+      const task: Promise<string | null> = navigator.locks
+        ? (async () => await navigator.locks.request("geeksium-pos-auth-refresh", perform))()
+        : perform();
+      renewing = task.finally(() => { renewing = null; });
     }
+    return renewing;
+  }
+
+  /** Renueva antes de vencer; también recupera la sesión al volver del background. */
+  async function ensureFreshSession(skewMs = 60_000): Promise<boolean> {
+    if (!navigator.onLine) { if (user.value) offlineSession.value = true; return !!user.value; }
+    if (getAccessToken() && accessExpiresAt.value && accessExpiresAt.value - Date.now() > skewMs) return true;
+    return !!await renew();
   }
 
   async function signOut(): Promise<void> {
@@ -123,7 +148,7 @@ export const useAuthStore = defineStore("auth", () => {
     } catch {
       // Local sign-out succeeds offline; bootstrap will not reuse the remaining cookie.
     } finally {
-      clear();
+      clear(false);
     }
   }
 
@@ -167,7 +192,7 @@ export const useAuthStore = defineStore("auth", () => {
   async function bootstrap(): Promise<void> {
     if (ready.value) return;
     bootstrapping ??= (async () => {
-      configureAuthHandlers({ refresh: renew, onSessionLost: () => { if (!offlineSession.value) clear(); } });
+      configureAuthHandlers({ refresh: renew, onSessionLost: () => { if (!offlineSession.value) clear(true); } });
       const signedOut = await getMeta<boolean>("explicit-signout").catch(() => undefined);
       if (!signedOut && !navigator.onLine) offlineSession.value = true;
       const token = signedOut || !navigator.onLine ? null : await renew();
@@ -203,7 +228,10 @@ export const useAuthStore = defineStore("auth", () => {
     signOut,
     bootstrap,
     renew,
+    ensureFreshSession,
     offlineSession,
+    accessExpiresAt,
+    sessionExpired,
     restoreOnline,
     updateAuthorization,
   };

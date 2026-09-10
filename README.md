@@ -63,8 +63,10 @@ PostgreSQL puro, migraciones en SQL estándar aplicadas por `npm run migrate`.
 La API usa PostgreSQL directamente y un adaptador REST opcional para imágenes
 en Supabase Storage. Vue no usa SDK de Supabase. Migrar de proveedor requiere
 restaurar PostgreSQL, configurar TLS/conexión y adaptar/copiar Storage si se usa.
-La migración aditiva `0004_local_first_catalog.sql` se probó solo localmente;
-debe preceder al despliegue de esta API, incluso por las columnas de auditoría.
+Las migraciones aditivas `0004_local_first_catalog.sql` y
+`0005_inventory_v1.sql` deben preceder al despliegue de esta API. La 0005 deja
+el costo opcional y agrega movimientos/stock transaccional; sigue pendiente de
+aplicarse y validarse en PostgreSQL local o desechable (nunca se aplicó remoto).
 
 ## Documentación
 

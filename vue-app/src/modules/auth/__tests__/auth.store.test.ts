@@ -141,6 +141,20 @@ describe("auth.store", () => {
     expect(auth.ready).toBe(true);
     expect(auth.isAuthenticated).toBe(false);
     expect(currentToken).toBeNull();
+    expect(auth.sessionExpired).toBe(true);
+  });
+
+  it("renueva silenciosamente un access token próximo a expirar", async () => {
+    api.login.mockResolvedValue({ ...AUTH_RESPONSE, expiresIn: 30 });
+    api.refresh.mockResolvedValue({ ...AUTH_RESPONSE, accessToken: "token-renovado" });
+    httpMock.get.mockResolvedValue(profile(["*"]));
+    const auth = useAuthStore();
+    await auth.signIn("owner@test.local", "secreto");
+
+    expect(await auth.ensureFreshSession()).toBe(true);
+    expect(api.refresh).toHaveBeenCalledTimes(1);
+    expect(currentToken).toBe("token-renovado");
+    expect(auth.sessionExpired).toBe(false);
   });
 
   it("cerrar sesión limpia usuario, permisos y token en memoria", async () => {

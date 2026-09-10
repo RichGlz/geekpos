@@ -9,7 +9,7 @@
  *    funciones degradan sin romper la aplicación.
  */
 export const DB_NAME = "geeksium-pos";
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 export const STORE_SYNC_QUEUE = "sync_queue";
 export const STORE_META = "meta";
@@ -18,7 +18,8 @@ export const STORE_ALIASES = "product_aliases";
 export const STORE_BRANCH_PRODUCTS = "branch_products";
 export const STORE_IMAGES = "pending_images";
 export const STORE_ASSETS = "assets";
-export const SCOPED_STORES = [STORE_PRODUCTS, STORE_ALIASES, STORE_BRANCH_PRODUCTS, STORE_IMAGES, STORE_ASSETS];
+export const STORE_INVENTORY_MOVEMENTS = "inventory_movements";
+export const SCOPED_STORES = [STORE_PRODUCTS, STORE_ALIASES, STORE_BRANCH_PRODUCTS, STORE_IMAGES, STORE_ASSETS, STORE_INVENTORY_MOVEMENTS];
 
 export function isIndexedDbAvailable(): boolean {
   return typeof indexedDB !== "undefined";

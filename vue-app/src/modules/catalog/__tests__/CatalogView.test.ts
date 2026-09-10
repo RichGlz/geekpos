@@ -31,12 +31,17 @@ function button(wrapper: ReturnType<typeof mount>, text: string) {
   return wrapper.findAll("button").find((item) => item.text() === text)!;
 }
 describe("catalog form ownership and conflict review", () => {
-  it("links global product with empty required price and cost", async () => {
+  it("requires sale price and keeps purchase cost optional", async () => {
     const wrapper = mount(CatalogView);
     await button(wrapper, "Agregar").trigger("click");
     const money = wrapper.findAll('input[inputmode="decimal"]');
     expect(money).toHaveLength(2);
-    expect(money.every((field) => (field.element as HTMLInputElement).value === "" && field.attributes("required") !== undefined)).toBe(true);
+    expect((money[0]!.element as HTMLInputElement).value).toBe("");
+    expect(money[0]!.attributes("required")).not.toBeUndefined();
+    expect((money[1]!.element as HTMLInputElement).value).toBe("");
+    expect(money[1]!.attributes("required")).toBeUndefined();
+    expect(wrapper.text()).toContain("Estado: Activo");
+    expect(wrapper.text()).toContain("Llevar control de inventario");
     wrapper.unmount();
   });
   it("edits global fields without creating a branch assignment", async () => {

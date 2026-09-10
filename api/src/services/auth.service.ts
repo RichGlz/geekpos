@@ -116,6 +116,7 @@ export async function login(
   const sessionId = newId();
   const familyId = newId();
   const refreshSecret = generateRefreshTokenSecret();
+  // El TTL de refresh también es el límite absoluto de esta sesión.
   const expiresAt = refreshExpiry(refreshTtlDays);
 
   await db.transaction(async (tx) => {
@@ -235,6 +236,15 @@ export async function refresh(
   const session = await sessionRepository.findActiveById(db, record.sessionId);
   if (!session) throw unauthorized("Sesión revocada. Inicia sesión de nuevo.", "SESSION_REVOKED");
 
+  const absoluteExpiresAt = new Date(session.createdAt.getTime() + refreshTtlDays * 86_400_000);
+  if (absoluteExpiresAt.getTime() <= Date.now()) {
+    await db.transaction(async (tx) => {
+      await refreshTokenRepository.revokeFamily(tx, record.familyId, "EXPIRED");
+      await sessionRepository.revoke(tx, session.id, "ABSOLUTE_EXPIRY");
+    });
+    throw unauthorized("Tu sesión expiró. Inicia sesión de nuevo.", "SESSION_EXPIRED");
+  }
+
   if (parsed.sessionId !== session.id) {
     await burnFamily(deps, record, meta);
     throw unauthorized("Sesión no válida. Inicia sesión de nuevo.", "INVALID_REFRESH_TOKEN");
@@ -252,7 +262,9 @@ export async function refresh(
 
   const nextSecret = generateRefreshTokenSecret();
   const nextId = newId();
-  const expiresAt = refreshExpiry(refreshTtlDays);
+  // Rotar no prolonga indefinidamente la sesión: todos los sucesores quedan
+  // acotados al vencimiento absoluto calculado desde sessions.created_at.
+  const expiresAt = absoluteExpiresAt;
 
   /**
    * Rotación atómica. Dentro de la transacción se bloquea la fila del token

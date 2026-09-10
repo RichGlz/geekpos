@@ -12,8 +12,9 @@ import Dashboard from "@/views/DashboardView.vue";
 const mock = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock("@/lib/http", () => ({
   http: mock, ApiError: class ApiError extends Error { constructor(public status: number, message: string) { super(message); } },
-  setAccessToken: vi.fn(), configureAuthHandlers: vi.fn(),
+  setAccessToken: vi.fn(), getAccessToken: () => "test-access-token", configureAuthHandlers: vi.fn(),
 }));
+const { ApiError } = await import("@/lib/http");
 const org = "00000000-0000-4000-8000-000000000001", user = "00000000-0000-4000-8000-000000000002", branch = "00000000-0000-4000-8000-000000000003";
 const input: ProductInput = { displayName: "Producto local", barcode: null, description: "", category: "", sku: "",
   itemType: "product", baseUnit: "pieza", conversions: [], assetId: null, active: true };
@@ -24,6 +25,7 @@ beforeEach(async () => {
   const auth = useAuthStore();
   auth.user = { id: user, organizationId: org, fullName: "Owner", email: "owner@example.test", isActive: true, isPlatformAdmin: false };
   auth.roles = ["OWNER"]; auth.permissions = ["*"]; auth.licenseStatus = "ACTIVE"; auth.ready = true;
+  auth.accessExpiresAt = Date.now() + 10 * 60_000;
   mock.get.mockImplementation(async (url: string) => {
     if (url === "/sync/context") return { data: { organization: { name: "Local", currency: "MXN", timezone: "America/Mexico_City" },
       license: { plan: "STANDARD", status: "ACTIVE", expiresAt: null }, branches: [{ id: branch, name: "A" }],
@@ -66,5 +68,11 @@ describe("local-first app lifecycle", () => {
     await sync.sync(true); expect(mock.get.mock.calls.length).toBe(calls);
     window.dispatchEvent(new Event("online")); await sync.sync(true);
     expect(sync.apiReachable).toBe(true); expect(sync.syncState).toBe("idle");
+  });
+  it("does not label an authentication rejection as an unavailable API", async () => {
+    mock.get.mockRejectedValue(new ApiError(401, "SESSION_EXPIRED", "Sesión expirada"));
+    const sync = useSyncStore(); sync.start(); await sync.sync(true);
+    expect(sync.apiReachable).toBe(true);
+    expect(sync.syncState).toBe("error");
   });
 });

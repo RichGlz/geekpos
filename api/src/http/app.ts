@@ -16,6 +16,7 @@ import { placeholderRoutes } from "./routes/placeholder.routes.js";
 import { organizationRoutes } from "./routes/organization.routes.js";
 import { catalogRoutes } from "./routes/catalog.routes.js";
 import { localFirstRoutes } from "./routes/local-first.routes.js";
+import { inventoryRoutes } from "./routes/inventory.routes.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -137,7 +138,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         .status(503)
         .send({ status: "degraded", database, requestId: request.id });
     }
-    return { status: "ok", database, uptime: Math.round(process.uptime()) };
+    return {
+      status: "ok",
+      database,
+      ...(env.isProduction ? {} : { uptime: Math.round(process.uptime()) }),
+    };
   });
 
   await app.register(
@@ -156,6 +161,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       await api.register(async (scope) => placeholderRoutes(scope, { authenticate }));
       await api.register(async (scope) => catalogRoutes(scope, { db, env, authenticate }));
       await api.register(async (scope) => localFirstRoutes(scope, { db, env, authenticate }));
+      await api.register(async (scope) => inventoryRoutes(scope, { db, authenticate }), { prefix: "/inventory" });
     },
     { prefix: "/api/v1" },
   );

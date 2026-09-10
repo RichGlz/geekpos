@@ -2,6 +2,8 @@ import type { CatalogChanges, CatalogCommand, Product, ProductAlias, BranchProdu
 import { toRaw } from "vue";
 import { atomic, getMeta, readScope, scopedRow, STORE_PRODUCTS, STORE_ALIASES,
   STORE_BRANCH_PRODUCTS, STORE_META, STORE_SYNC_QUEUE, STORE_IMAGES, STORE_ASSETS, type ScopedRow } from "./idb";
+import { STORE_INVENTORY_MOVEMENTS } from "./idb";
+import type { InventoryMovement } from "@/lib/inventory";
 import type { SyncOperation } from "./syncQueue";
 
 export interface SyncMetadata {
@@ -66,20 +68,24 @@ export function putCachedAsset(tx: IDBTransaction, scope: string, id: string, bl
   };
 }
 export async function readCatalog(scope: string) {
-  const [products, aliases, branchProducts] = await Promise.all([
+  const [products, aliases, branchProducts, inventoryMovements] = await Promise.all([
     readScope<Product>(STORE_PRODUCTS, scope), readScope<ProductAlias>(STORE_ALIASES, scope),
     readScope<BranchProduct>(STORE_BRANCH_PRODUCTS, scope),
+    readScope<InventoryMovement>(STORE_INVENTORY_MOVEMENTS, scope),
   ]);
-  return { products, aliases, branchProducts };
+  return { products, aliases, branchProducts, inventoryMovements };
 }
 export async function commitPage(scope: string, changes: CatalogChanges, meta: SyncMetadata,
   operationId?: string): Promise<void> {
-  await atomic([STORE_PRODUCTS, STORE_ALIASES, STORE_BRANCH_PRODUCTS, STORE_META, STORE_SYNC_QUEUE], (tx) => {
+  await atomic([STORE_PRODUCTS, STORE_ALIASES, STORE_BRANCH_PRODUCTS, STORE_INVENTORY_MOVEMENTS, STORE_META, STORE_SYNC_QUEUE], (tx) => {
     for (const [store, records] of [
       [STORE_PRODUCTS, changes.products], [STORE_ALIASES, changes.productAliases],
       [STORE_BRANCH_PRODUCTS, changes.branchProducts],
     ] as const) {
       for (const record of records) tx.objectStore(store).put(scopedRow(scope, record.id, record));
+    }
+    for (const movement of changes.inventoryMovements ?? []) {
+      tx.objectStore(STORE_INVENTORY_MOVEMENTS).put(scopedRow(scope, movement.id, movement));
     }
     tx.objectStore(STORE_META).put({ key: "sync:" + scope, value: meta });
     if (operationId) tx.objectStore(STORE_SYNC_QUEUE).delete(operationId);

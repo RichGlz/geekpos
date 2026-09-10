@@ -1,5 +1,6 @@
 import type { Db } from "../db/pool.js";
 import type { Product, ProductAlias, ProductInput, BranchProduct, Asset } from "../lib/catalog.js";
+import type { InventoryMovement } from "../lib/inventory.js";
 
 const productColumns = `id, organization_id AS "organizationId", display_name AS "displayName",
  normalized_name AS "normalizedName", compact_key AS "compactKey", barcode, description, category, sku,
@@ -25,14 +26,14 @@ export async function version(db: Db, org: string): Promise<string> {
   return rows[0]?.version ?? "0";
 }
 export async function recordChange(db: Db, org: string, entity: string,
-  data: Product | ProductAlias | BranchProduct, branchId: string | null = null): Promise<void> {
+  data: Product | ProductAlias | BranchProduct | InventoryMovement, branchId: string | null = null): Promise<void> {
   const { rows } = await db.query<{ version: string }>(
     "UPDATE catalog_sync_state SET version = version + 1 WHERE organization_id = $1 RETURNING version::text", [org]);
   await db.query(`INSERT INTO catalog_changes (organization_id, version, entity, entity_id, branch_id, data)
     VALUES ($1,$2,$3,$4,$5,$6)`, [org, rows[0]!.version, entity, data.id, branchId, JSON.stringify(data)]);
 }
 export async function changes(db: Db, org: string, since: string, until: string, branchId: string | null, limit: number) {
-  const { rows } = await db.query<{ version: string; entity: "products" | "productAliases" | "branchProducts"; data: Product | ProductAlias | BranchProduct }>(
+  const { rows } = await db.query<{ version: string; entity: "products" | "productAliases" | "branchProducts" | "inventoryMovements"; data: Product | ProductAlias | BranchProduct | InventoryMovement }>(
     `SELECT version::text, entity, data FROM catalog_changes
       WHERE organization_id = $1 AND version > $2::bigint AND version <= $3::bigint
         AND (branch_id IS NULL OR branch_id = $4::uuid)
@@ -90,7 +91,7 @@ export async function branchProduct(db: Db, org: string, branch: string, product
   return rows[0] ? dated(rows[0]) : null;
 }
 export async function saveBranchProduct(db: Db, org: string, id: string, branch: string, productId: string,
-  value: { price: string; cost: string; trackInventory: boolean; active: boolean }, revision: number): Promise<BranchProduct> {
+  value: { price: string; cost: string | null; trackInventory: boolean; active: boolean }, revision: number): Promise<BranchProduct> {
   const { rows } = await db.query<BranchProduct>(`INSERT INTO branch_products
     (id,organization_id,branch_id,product_id,price,cost,track_inventory,active,revision)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)

@@ -6,10 +6,11 @@ import { createSyncManager, type SyncState } from "@/lib/offline/syncManager";
 import { accountScope, catalogScope, commitPage, metadata, readCatalog, reconcileAccess, scopeBelongsTo,
   putCachedAsset, type PendingImage, type SyncMetadata } from "@/lib/offline/catalogDb";
 import { atomic, DB_VERSION, getMeta, readScope, rowKey, setMeta, STORE_ASSETS,
-  STORE_IMAGES, STORE_SYNC_QUEUE, withStore, type ScopedRow } from "@/lib/offline/idb";
+  STORE_IMAGES, STORE_INVENTORY_MOVEMENTS, STORE_SYNC_QUEUE, withStore, type ScopedRow } from "@/lib/offline/idb";
 import { list, markFailed, type SyncOperation } from "@/lib/offline/syncQueue";
 import { DAY_MS, licenseState, type OfflineLicense } from "@/lib/offline/license";
 import type { Asset, CatalogChanges, CatalogCommand, Product, ProductAlias, BranchProduct } from "@/lib/catalog";
+import type { InventoryCommand, InventoryMovement } from "@/lib/inventory";
 import { CURRENT_VERSION, UPDATE_CHANNEL, useUpdateStore, type ReleaseInfo } from "./update.store";
 import { useCriticalStore } from "./critical.store";
 
@@ -35,6 +36,7 @@ export const useSyncStore = defineStore("sync", () => {
   const branchId = ref<string | null>(null);
   const scope = ref("");
   const products = ref<Product[]>([]), aliases = ref<ProductAlias[]>([]), branchProducts = ref<BranchProduct[]>([]);
+  const inventoryMovements = ref<InventoryMovement[]>([]);
   const operations = ref<SyncOperation[]>([]);
   const pendingImages = ref<PendingImage[]>([]);
   const license = ref<OfflineLicense>();
@@ -57,6 +59,7 @@ export const useSyncStore = defineStore("sync", () => {
     ]);
     if (scope.value !== captured) return;
     products.value = catalog.products; aliases.value = catalog.aliases; branchProducts.value = catalog.branchProducts;
+    inventoryMovements.value = catalog.inventoryMovements;
     operations.value = queue.filter((op) => op.scope === captured);
     pendingImages.value = images.filter((row) => row.scope === captured).map((row) => row.value);
     const user = auth.user;
@@ -69,7 +72,8 @@ export const useSyncStore = defineStore("sync", () => {
     generation++;
     branchId.value = id;
     scope.value = auth.user?.organizationId ? catalogScope(auth.user.organizationId, auth.user.id, id) : "";
-    products.value = []; aliases.value = []; branchProducts.value = []; operations.value = []; pendingImages.value = [];
+    products.value = []; aliases.value = []; branchProducts.value = []; inventoryMovements.value = [];
+    operations.value = []; pendingImages.value = [];
     if (account()) await setMeta("branch:" + account(), id);
     await reloadLocal();
   }
@@ -112,10 +116,21 @@ export const useSyncStore = defineStore("sync", () => {
     for (const operation of (await list()).filter((op) => op.scope === captured)) {
       if (operation.organizationId !== auth.user?.organizationId || operation.userId !== auth.user?.id) break;
       if (operation.status === "REQUIRES_REVIEW") continue;
-      if (operation.kind !== "catalog.command") continue;
-      const imageId = (operation.payload as CatalogCommand).product?.assetId;
+      if (operation.kind !== "catalog.command" && operation.kind !== "inventory.move") continue;
+      const imageId = operation.kind === "catalog.command" ? (operation.payload as CatalogCommand).product?.assetId : undefined;
       if (imageId && failedImages.has(imageId)) { await markFailed(operation.id, failedImages.get(imageId)!); continue; }
       try {
+        if (operation.kind === "inventory.move") {
+          const response = await http.post<{ movement: InventoryMovement; branchProduct: BranchProduct }>(
+            "/inventory/movements", operation.payload as InventoryCommand, binding,
+          );
+          const meta = await metadata(captured) ?? baseMeta();
+          await commitPage(captured, {
+            products: [], productAliases: [], branchProducts: [response.data.branchProduct],
+            inventoryMovements: [response.data.movement],
+          }, meta, operation.id);
+          continue;
+        }
         const response = await http.post<{ product: Product; branchProduct: BranchProduct | null }>("/sync/operations", operation.payload, binding);
         const meta = await metadata(captured) ?? baseMeta();
         await commitPage(captured, {
@@ -125,6 +140,10 @@ export const useSyncStore = defineStore("sync", () => {
       } catch (caught) {
         const needsReview = caught instanceof ApiError && caught.status >= 400 && caught.status < 500 && caught.status !== 429 && caught.status !== 401;
         await markFailed(operation.id, caught instanceof Error ? caught.message : "No se pudo enviar.", needsReview);
+        if (needsReview && operation.kind === "inventory.move") {
+          const command = operation.payload as InventoryCommand;
+          await withStore(STORE_INVENTORY_MOVEMENTS, "readwrite", (store) => store.delete(rowKey(captured, command.id)));
+        }
         if (!needsReview) throw caught;
       }
     }
@@ -144,7 +163,10 @@ export const useSyncStore = defineStore("sync", () => {
   async function run() {
     await ready;
     if (!account()) return;
-    if (auth.offlineSession && !await auth.restoreOnline()) throw new Error("Reconecta para validar tu sesión.");
+    if (!await auth.ensureFreshSession()) {
+      if (auth.sessionExpired) throw new ApiError(401, "SESSION_EXPIRED", "La sesión expiró. Inicia sesión de nuevo.");
+      throw new ApiError(0, "NETWORK_ERROR", "No se pudo validar la sesión porque la API no está disponible.");
+    }
     const releaseCritical = critical.enter("Sincronización");
     try {
       const execute = async () => {
@@ -207,7 +229,9 @@ export const useSyncStore = defineStore("sync", () => {
       if (navigator.locks) await navigator.locks.request("geeksium-pos-sync", execute);
       else await execute(); // Server idempotency still protects duplicate delivery.
     } catch (caught) {
-      apiReachable.value = false;
+      apiReachable.value = caught instanceof ApiError
+        ? caught.status !== 0 && caught.status < 500
+        : navigator.onLine ? apiReachable.value : false;
       await reloadLocal().catch(() => undefined);
       throw caught;
     } finally { releaseCritical(); }
@@ -219,7 +243,8 @@ export const useSyncStore = defineStore("sync", () => {
   async function initializeAccount() {
     const accountGeneration = ++generation;
     context.value = null; scope.value = ""; license.value = undefined;
-    products.value = []; aliases.value = []; branchProducts.value = []; operations.value = []; pendingImages.value = [];
+    products.value = []; aliases.value = []; branchProducts.value = []; inventoryMovements.value = [];
+    operations.value = []; pendingImages.value = [];
     lastSuccessfulSyncAt.value = null; apiReachable.value = null;
     pendingOperations.value = 0; pendingUploads.value = 0;
     const capturedAccount = account();
@@ -234,7 +259,11 @@ export const useSyncStore = defineStore("sync", () => {
   }
   function online() { isOnline.value = true; void manager.sync(true); }
   function offline() { isOnline.value = false; apiReachable.value = false; manager.offline(); }
-  function visible() { if (document.visibilityState === "visible") void manager.sync(); }
+  function visible() {
+    if (document.visibilityState === "visible") {
+      void auth.ensureFreshSession().finally(() => manager.sync(true));
+    }
+  }
   function start() {
     if (initialized) return;
     initialized = true;
@@ -262,5 +291,6 @@ export const useSyncStore = defineStore("sync", () => {
   async function selectBranch(id: string) { await setBranch(id); await manager.sync(true); }
   return { isOnline, apiReachable, lastOnlineAt, lastSuccessfulSyncAt, syncState, pendingOperations, pendingUploads,
     operations, pendingImages, offlineLicenseState, license, error, imageWarning, context, branchId, branches,
-    scope, products, aliases, branchProducts, start, stop, sync: manager.sync, reloadLocal, selectBranch };
+    scope, products, aliases, branchProducts, inventoryMovements,
+    start, stop, sync: manager.sync, reloadLocal, selectBranch };
 });
